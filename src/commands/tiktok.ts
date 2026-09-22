@@ -72,8 +72,10 @@ async function postToBuffer(channelId: string, text: string, videoUrl: string, t
     { query: mutation, variables: { input: {
       channelId,
       text,
+      mode: 'customScheduled',
+      dueAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
       schedulingType: 'automatic',
-      needsApproval: true,
+      needsApproval: false,
       assets: [{ video: { url: videoUrl } }],
     }}},
     { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }

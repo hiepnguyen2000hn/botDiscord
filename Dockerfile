@@ -1,6 +1,11 @@
 FROM node:20-alpine
 
-RUN apk add --no-cache ffmpeg python3
+RUN apk add --no-cache \
+    ffmpeg \
+    python3 \
+    py3-pip \
+    curl \
+    && pip3 install --break-system-packages yt-dlp curl-cffi
 
 WORKDIR /app
 
