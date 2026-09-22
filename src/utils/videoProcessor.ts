@@ -7,16 +7,23 @@ export interface ProcessOptions {
   saturation?: number;  // default 1.05
 }
 
-function hasVideoStream(filePath: string): boolean {
+function probeStreams(filePath: string): { hasVideo: boolean; hasAudio: boolean; audioOnly: boolean } {
   try {
     const out = execSync(
-      `ffprobe -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 "${filePath}"`,
+      `ffprobe -v error -show_entries stream=codec_type -of csv=p=0 "${filePath}"`,
       { timeout: 8000 }
     ).toString().trim();
-    return out === 'video';
+    const streams = out.split('\n').map(s => s.trim()).filter(Boolean);
+    const hasVideo = streams.includes('video');
+    const hasAudio = streams.includes('audio');
+    return { hasVideo, hasAudio, audioOnly: !hasVideo && hasAudio };
   } catch {
-    return false;
+    return { hasVideo: false, hasAudio: false, audioOnly: false };
   }
+}
+
+function hasVideoStream(filePath: string): boolean {
+  return probeStreams(filePath).hasVideo;
 }
 
 function runFFmpeg(args: string[]): Promise<void> {
@@ -45,7 +52,12 @@ export async function processVideo(
   outputPath: string,
   opts: ProcessOptions = {}
 ): Promise<void> {
-  const isVideo = hasVideoStream(inputPath);
+  const { hasVideo: isVideo, audioOnly } = probeStreams(inputPath);
+
+  // Slide/carousel posts: yt-dlp only downloads background audio, no images
+  if (audioOnly) {
+    throw new Error('Đây là bài slide ảnh — yt-dlp chỉ download được nhạc nền, không có ảnh. Bỏ qua.');
+  }
   const speed   = opts.speed      ?? 1.05;
   const brightness = opts.brightness ?? 0.03;
   const saturation = opts.saturation ?? 1.05;
@@ -70,6 +82,7 @@ export async function processVideo(
       '-c:v', 'libx264', '-crf', '26', '-preset', 'veryfast',
       '-threads', '2',
       '-c:a', 'aac', '-b:a', '128k',
+      '-movflags', '+faststart',
       '-y', outputPath,
     ]);
   } else {
