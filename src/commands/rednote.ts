@@ -281,6 +281,7 @@ module.exports = {
         });
 
         btnCollector.on('collect', async (btn: ButtonInteraction) => {
+          try {
           if (btn.customId === 'rednote_cancel') {
             await btn.update({ content: '❌ Đã huỷ.', embeds: [], components: [] });
             return;
@@ -339,6 +340,10 @@ module.exports = {
             .setDescription(results.join('\n'));
 
           await interaction.editReply({ content: '', embeds: [doneEmbed], components: [] });
+          } catch (e: any) {
+            console.error('[rednote] btn handler error:', e.message);
+            try { await interaction.editReply(`❌ Lỗi xử lý: ${e.message}`); } catch {}
+          }
         });
       });
 

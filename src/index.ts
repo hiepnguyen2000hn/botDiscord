@@ -44,3 +44,10 @@ for (const file of eventFiles) {
 }
 
 client.login(process.env.DISCORD_TOKEN);
+
+process.on('unhandledRejection', (err: any) => {
+  console.error('[unhandledRejection]', err?.message ?? err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err.message);
+});
