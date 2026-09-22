@@ -45,35 +45,43 @@ export async function processVideo(
   outputPath: string,
   opts: ProcessOptions = {}
 ): Promise<void> {
-  // File là ảnh hoặc không có video stream → copy thẳng, không process
-  if (!hasVideoStream(inputPath)) {
-    fs.copyFileSync(inputPath, outputPath);
-    return;
-  }
-
-  const speed      = opts.speed      ?? 1.05;
+  const isVideo = hasVideoStream(inputPath);
+  const speed   = opts.speed      ?? 1.05;
   const brightness = opts.brightness ?? 0.03;
   const saturation = opts.saturation ?? 1.05;
 
-  // geq add noise ±3 mỗi channel — mắt không thấy (ΔE < 0.1), AI thấy pixel khác
   const noiseFilter = [
     `geq=r='clip(r(X,Y)+random(1)*3-1,0,255)':`,
     `g='clip(g(X,Y)+random(2)*3-1,0,255)':`,
     `b='clip(b(X,Y)+random(3)*3-1,0,255)'`,
   ].join('');
 
-  await runFFmpeg([
-    '-i', inputPath,
-    '-vf', [
-      noiseFilter,
-      `setpts=PTS/${speed}`,
-      `eq=brightness=${brightness}:saturation=${saturation}`,
-    ].join(','),
-    '-af', `atempo=${speed}`,
-    '-map_metadata', '-1',
-    '-c:v', 'libx264', '-crf', '26', '-preset', 'veryfast',
-    '-threads', '2',
-    '-c:a', 'aac', '-b:a', '128k',
-    '-y', outputPath,
-  ]);
+  if (isVideo) {
+    // Video: noise + speed + color + re-encode
+    await runFFmpeg([
+      '-i', inputPath,
+      '-vf', [
+        noiseFilter,
+        `setpts=PTS/${speed}`,
+        `eq=brightness=${brightness}:saturation=${saturation}`,
+      ].join(','),
+      '-af', `atempo=${speed}`,
+      '-map_metadata', '-1',
+      '-c:v', 'libx264', '-crf', '26', '-preset', 'veryfast',
+      '-threads', '2',
+      '-c:a', 'aac', '-b:a', '128k',
+      '-y', outputPath,
+    ]);
+  } else {
+    // Ảnh: noise + color + strip metadata, re-save
+    await runFFmpeg([
+      '-i', inputPath,
+      '-vf', [
+        noiseFilter,
+        `eq=brightness=${brightness}:saturation=${saturation}`,
+      ].join(','),
+      '-map_metadata', '-1',
+      '-y', outputPath,
+    ]);
+  }
 }
