@@ -40,14 +40,35 @@ async function fetchProfile(idOrUrl: string) {
   return res.data.data as any;
 }
 
-async function fetchVideoPosts(idOrUrl: string) {
-  const res = await axios.get(`https://${XHS_HOST}/v1/rednote/profiles/posts`, {
-    params: { profile_id_or_url: idOrUrl },
-    headers: xhsHeaders(),
-    timeout: 15000,
-  });
-  const notes: any[] = res.data.data.notes ?? [];
-  return notes.filter(n => n.type === 'video');
+async function fetchVideoPosts(idOrUrl: string, limit: number): Promise<any[]> {
+  const videos: any[] = [];
+  let cursor: string | undefined;
+
+  while (videos.length < limit) {
+    const params: any = { profile_id_or_url: idOrUrl };
+    if (cursor) params.cursor = cursor;
+
+    const res = await axios.get(`https://${XHS_HOST}/v1/rednote/profiles/posts`, {
+      params,
+      headers: xhsHeaders(),
+      timeout: 15000,
+    });
+    const data = res.data.data;
+    const notes: any[] = data.notes ?? [];
+
+    for (const n of notes) {
+      if (n.type === 'video') {
+        videos.push(n);
+        if (videos.length >= limit) break;
+      }
+    }
+
+    if (!data.has_more || !data.next_cursor) break;
+    cursor = data.next_cursor;
+    await new Promise(r => setTimeout(r, 800));
+  }
+
+  return videos;
 }
 
 async function downloadVideoFile(videoUrl: string, outPath: string): Promise<void> {
@@ -120,22 +141,26 @@ module.exports = {
     .setDescription('Crawl RedNote/XHS user → chọn video → upload R2 / reup TikTok')
     .addStringOption(opt =>
       opt.setName('user').setDescription('URL profile hoặc user ID XiaoHongShu').setRequired(true)
+    )
+    .addIntegerOption(opt =>
+      opt.setName('limit').setDescription('Số video tối đa cần lấy (mặc định 10, tối đa 25)')
+        .setMinValue(1).setMaxValue(25)
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const userInput = interaction.options.getString('user', true).trim();
+    const limit = interaction.options.getInteger('limit') ?? 10;
     await interaction.deferReply();
 
     if (!process.env.RAPIDAPI_KEY)
       return interaction.editReply('❌ Chưa cấu hình RAPIDAPI_KEY');
 
     try {
-      await interaction.editReply(`⏳ Đang lấy thông tin **${userInput}**...`);
+      await interaction.editReply(`⏳ Đang lấy thông tin **${userInput}** (tối đa ${limit} video)...`);
 
-      const [profile, videoPosts] = await Promise.all([
-        fetchProfile(userInput),
-        fetchVideoPosts(userInput),
-      ]);
+      const profile = await fetchProfile(userInput);
+      await interaction.editReply(`⏳ Đang crawl video posts...`);
+      const videoPosts = await fetchVideoPosts(userInput, limit);
 
       if (!videoPosts.length)
         return interaction.editReply('❌ Không tìm thấy video nào trên profile này');
