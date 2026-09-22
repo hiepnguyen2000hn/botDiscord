@@ -123,7 +123,12 @@ module.exports = {
         return interaction.editReply(`❌ Không tìm thấy **@${username}**`);
 
       const authorMeta = (items[0] as any).authorMeta ?? {};
-      const videos = (items as any[]).slice(0, 10).map((v, i) => ({
+      // Chỉ lấy post dạng video (có videoMeta.duration), bỏ qua ảnh/carousel
+      const videoItems = (items as any[]).filter(v => v.videoMeta?.duration);
+      if (!videoItems.length)
+        return interaction.editReply(`❌ Không tìm thấy video nào của **@${username}**`);
+
+      const videos = videoItems.slice(0, 10).map((v, i) => ({
         index:    i,
         id:       String(v.id),
         url:      v.webVideoUrl ?? `https://www.tiktok.com/@${username}/video/${v.id}`,

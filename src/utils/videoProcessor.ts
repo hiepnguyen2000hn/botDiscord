@@ -1,9 +1,22 @@
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
+import * as fs from 'fs';
 
 export interface ProcessOptions {
   speed?: number;       // default 1.05
   brightness?: number;  // default 0.03
   saturation?: number;  // default 1.05
+}
+
+function hasVideoStream(filePath: string): boolean {
+  try {
+    const out = execSync(
+      `ffprobe -v error -select_streams v:0 -show_entries stream=codec_type -of csv=p=0 "${filePath}"`,
+      { timeout: 8000 }
+    ).toString().trim();
+    return out === 'video';
+  } catch {
+    return false;
+  }
 }
 
 function runFFmpeg(args: string[]): Promise<void> {
@@ -32,6 +45,12 @@ export async function processVideo(
   outputPath: string,
   opts: ProcessOptions = {}
 ): Promise<void> {
+  // File là ảnh hoặc không có video stream → copy thẳng, không process
+  if (!hasVideoStream(inputPath)) {
+    fs.copyFileSync(inputPath, outputPath);
+    return;
+  }
+
   const speed      = opts.speed      ?? 1.05;
   const brightness = opts.brightness ?? 0.03;
   const saturation = opts.saturation ?? 1.05;
