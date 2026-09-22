@@ -16,6 +16,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { processVideo } from '../utils/videoProcessor';
 
 const ACTOR_ID = 'clockworks~tiktok-scraper';
 
@@ -262,14 +263,19 @@ module.exports = {
 
           for (let i = 0; i < chosen.length; i++) {
             const v = chosen[i];
-            const tmpPath = path.join(os.tmpdir(), `tiktok_${v.id}.mp4`);
+            const rawPath       = path.join(os.tmpdir(), `tiktok_raw_${v.id}.mp4`);
+            const processedPath = path.join(os.tmpdir(), `tiktok_${v.id}.mp4`);
             try {
               await interaction.editReply(`⏳ [${i + 1}/${chosen.length}] ⬇️ Downloading \`${v.caption.slice(0, 40)}\`...`);
-              await downloadVideo(v.url, tmpPath);
+              await downloadVideo(v.url, rawPath);
+
+              await interaction.editReply(`⏳ [${i + 1}/${chosen.length}] 🎬 Processing video...`);
+              await processVideo(rawPath, processedPath);
+              fs.unlinkSync(rawPath);
 
               await interaction.editReply(`⏳ [${i + 1}/${chosen.length}] ☁️ Uploading R2...`);
               const r2Key = `videos/tiktok_${v.id}.mp4`;
-              const r2Url = await uploadToR2(tmpPath, r2Key);
+              const r2Url = await uploadToR2(processedPath, r2Key);
 
               let line = `✅ **#${v.index + 1}** → [R2](${r2Url})`;
 
@@ -290,7 +296,8 @@ module.exports = {
             } catch (e: any) {
               results.push(`❌ **#${v.index + 1}** — ${e.message}`);
             } finally {
-              if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+              if (fs.existsSync(rawPath))       fs.unlinkSync(rawPath);
+              if (fs.existsSync(processedPath)) fs.unlinkSync(processedPath);
             }
           }
 
