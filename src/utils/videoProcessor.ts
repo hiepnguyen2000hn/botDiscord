@@ -77,7 +77,9 @@ export async function processVideo(
       '-map', '0:a',
       '-af', `atempo=${speed}`,
       '-map_metadata', '-1',
-      '-c:v', 'libx265', '-crf', '28',
+      // libx264 veryfast: nhẹ hơn x265 ~5x, đủ để đổi MD5 + hash
+      '-c:v', 'libx264', '-crf', '26', '-preset', 'veryfast',
+      '-threads', '2', // giới hạn CPU để không spike
       '-c:a', 'aac', '-b:a', '128k',
       '-y', outputPath,
     ]);
