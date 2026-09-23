@@ -8,6 +8,8 @@ import axios from 'axios';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
+const PROXY_URL = process.env.PROXY_API_URL ?? 'http://localhost:8317';
+
 function proxyHeaders() {
   return {
     Authorization: `Bearer ${process.env.PROXY_API_KEY}`,
@@ -17,7 +19,7 @@ function proxyHeaders() {
 
 async function fetchModels(): Promise<string[]> {
   try {
-    const res = await axios.get(`${process.env.PROXY_API_URL}/v1/models`, {
+    const res = await axios.get(`${PROXY_URL}/v1/models`, {
       headers: proxyHeaders(),
       timeout: 5000,
     });
@@ -74,7 +76,7 @@ module.exports = {
       messages.push({ role: 'user', content: message });
 
       const res = await axios.post(
-        `${process.env.PROXY_API_URL}/v1/chat/completions`,
+        `${PROXY_URL}/v1/chat/completions`,
         { model, messages, max_tokens: 2048 },
         { headers: proxyHeaders(), timeout: 60000 }
       );
