@@ -11,10 +11,15 @@ import {
 } from 'discord.js';
 import googleTrends from '@alkalisummer/google-trends-js';
 import type { TrendingKeyword } from '@alkalisummer/google-trends-js';
+import { extractArticle, generateScript, DEFAULT_SCRIPT_MODEL } from '../utils/scriptGenerator';
 
 const GEO = 'VN';
 const TRENDING_HOURS = 24; // GoogleTrendsTrendingHours.oneDay
 const MAX_RESULTS = 15;
+
+// Article link keyed by short id, so button customId stays under Discord's 100-char limit.
+const articleLinkStore = new Map<string, { title: string; link: string }>();
+let articleLinkCounter = 0;
 
 function formatNum(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'Tr+';
@@ -101,7 +106,8 @@ module.exports = {
             return;
           }
 
-          const articleEmbeds = artRes.data.slice(0, 3).map(a =>
+          const articles = artRes.data.slice(0, 3);
+          const articleEmbeds = articles.map(a =>
             new EmbedBuilder()
               .setColor(0x4285f4)
               .setTitle(a.title.slice(0, 256))
@@ -110,7 +116,58 @@ module.exports = {
               .setImage(a.image || null)
           );
 
-          await btn.editReply({ content: `📰 Bài viết liên quan đến **${keyword.keyword}**`, embeds: articleEmbeds });
+          const scriptRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            articles.map(a => {
+              const key = `sw${articleLinkCounter++}`;
+              articleLinkStore.set(key, { title: a.title, link: a.link });
+              return new ButtonBuilder()
+                .setCustomId(`trending_script_${key}`)
+                .setLabel(`🎬 Kịch bản: ${a.title.slice(0, 60)}`)
+                .setStyle(ButtonStyle.Primary);
+            })
+          );
+
+          const artReply = await btn.editReply({
+            content: `📰 Bài viết liên quan đến **${keyword.keyword}** — bấm nút để tạo kịch bản video từ 1 bài:`,
+            embeds: articleEmbeds,
+            components: [scriptRow],
+          });
+
+          const scriptCollector = artReply.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 10 * 60 * 1000,
+          });
+
+          scriptCollector.on('collect', async (sBtn: ButtonInteraction) => {
+            const key = sBtn.customId.replace('trending_script_', '');
+            const target = articleLinkStore.get(key);
+            if (!target) {
+              await sBtn.reply({ content: '❌ Nút đã hết hạn, bấm lại nút số ở trên để xem bài viết mới.', flags: MessageFlags.Ephemeral });
+              return;
+            }
+
+            await sBtn.deferReply({ flags: MessageFlags.Ephemeral });
+            try {
+              const article = await extractArticle(target.link);
+              const script = await generateScript(article);
+
+              const scriptEmbed = new EmbedBuilder()
+                .setColor(0x43b581)
+                .setTitle(article.title.slice(0, 256))
+                .setURL(target.link)
+                .setDescription(script.slice(0, 4000))
+                .setFooter({ text: `Model: ${DEFAULT_SCRIPT_MODEL}` });
+
+              if (article.image) scriptEmbed.setImage(article.image);
+
+              await sBtn.editReply({ embeds: [scriptEmbed] });
+            } catch (err: any) {
+              console.error('Trending scriptwriter error:', err);
+              await sBtn.editReply(`❌ Lỗi tạo kịch bản: ${err.message}`);
+            } finally {
+              articleLinkStore.delete(key);
+            }
+          });
         } catch (err: any) {
           console.error('Trending articles error:', err);
           await btn.editReply(`❌ Lỗi: ${err.message}`);
