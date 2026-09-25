@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { JSDOM } from 'jsdom';
+import { JSDOM, VirtualConsole } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 
 export const DEFAULT_SCRIPT_MODEL = 'claude-sonnet-4-6';
@@ -25,7 +25,8 @@ export async function extractArticle(url: string): Promise<ExtractedArticle> {
     timeout: 15000,
   });
 
-  const dom = new JSDOM(res.data, { url });
+  // Silent virtual console: don't let jsdom's internal CSS-parsing warnings spam stderr.
+  const dom = new JSDOM(res.data, { url, virtualConsole: new VirtualConsole() });
   const doc = dom.window.document;
 
   const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') ?? null;
