@@ -1,17 +1,10 @@
 import axios from 'axios';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { Readability } from '@mozilla/readability';
+import { chatCompletion } from './aiClient';
 
 export const DEFAULT_SCRIPT_MODEL = 'claude-sonnet-4-6';
-const PROXY_URL = process.env.PROXY_API_URL ?? 'http://localhost:8317';
 const MAX_ARTICLE_CHARS = 6000;
-
-function proxyHeaders() {
-  return {
-    Authorization: `Bearer ${process.env.PROXY_API_KEY}`,
-    'Content-Type': 'application/json',
-  };
-}
 
 export interface ExtractedArticle {
   title: string;
@@ -61,18 +54,13 @@ function buildPrompt(article: ExtractedArticle): { system: string; user: string 
 export async function generateScript(article: ExtractedArticle, model = DEFAULT_SCRIPT_MODEL): Promise<string> {
   const { system, user } = buildPrompt(article);
 
-  const res = await axios.post(
-    `${PROXY_URL}/v1/chat/completions`,
-    {
-      model,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      max_tokens: 1024,
-    },
-    { headers: proxyHeaders(), timeout: 60000 }
+  const result = await chatCompletion(
+    [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    model
   );
 
-  return res.data?.choices?.[0]?.message?.content?.trim() ?? '*(không có phản hồi)*';
+  return result.content || '*(không có phản hồi)*';
 }

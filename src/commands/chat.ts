@@ -5,6 +5,7 @@ import {
   EmbedBuilder,
 } from 'discord.js';
 import axios from 'axios';
+import { chatCompletion } from '../utils/aiClient';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
@@ -75,23 +76,19 @@ module.exports = {
       if (system) messages.push({ role: 'system', content: system });
       messages.push({ role: 'user', content: message });
 
-      const res = await axios.post(
-        `${PROXY_URL}/v1/chat/completions`,
-        { model, messages, max_tokens: 2048 },
-        { headers: proxyHeaders(), timeout: 60000 }
-      );
-
-      const reply = res.data?.choices?.[0]?.message?.content ?? '*(no response)*';
-      const usage = res.data?.usage;
+      const result = await chatCompletion(messages, model, 2048);
+      const reply = result.content || '*(no response)*';
+      const usage = result.usage;
+      const fellBack = result.source === 'deepseek';
 
       const embed = new EmbedBuilder()
         .setColor(0x5865f2)
-        .setAuthor({ name: `🤖 ${model}` })
+        .setAuthor({ name: `🤖 ${result.model}${fellBack ? ' (fallback: proxy unreachable)' : ''}` })
         .setDescription(reply.slice(0, 4000))
         .setFooter({
           text: usage
             ? `↑ ${usage.prompt_tokens} tokens  ↓ ${usage.completion_tokens} tokens`
-            : model,
+            : result.model,
         });
 
       await interaction.editReply({ content: '', embeds: [embed] });
